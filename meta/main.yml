@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  author: Dominik Lenhardt
+  description: Ansible role for managing docker containers with systemd
+  license: MIT
+  min_ansible_version: 3.0
+  platforms:
+  - name: EL
+    versions:
+    - 7
+    - 8
+  - name: Ubuntu
+    versions:
+      - xenial
+      - bionic
+      - focal
+  categories:
+  - system
+  - docker
+  - container
+dependencies:
+  - onkeldom.ansible-role-docker
