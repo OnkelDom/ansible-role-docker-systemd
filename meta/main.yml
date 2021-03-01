@@ -14,9 +14,9 @@ galaxy_info:
       - xenial
       - bionic
       - focal
-  categories:
+  galaxy_tags:
   - system
   - docker
   - container
 dependencies:
-  - onkeldom.ansible-role-docker
+  - onkeldom.ansible_role_docker
