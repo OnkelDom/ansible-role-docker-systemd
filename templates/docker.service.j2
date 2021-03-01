@@ -1,0 +1,113 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Docker Unit {{ item.name }}
+{% if item.documentation | length > 0 %}
+Documentation={{ item.documentation | }}
+{% endif %}
+Requires=docker.service
+After=docker.service
+
+[Service]
+{% if item.user is defined %}
+User={{ item.user | default('nobody') }} \
+{% endif %}
+{% if proxy_env | length >0 %}
+{%   for key, value in proxy_env.iteritems() %}
+Environment="{{ key }}={{ value }}"
+{%   endfor %}
+{% endif %}
+Environment="NO_PROXY=localhost,127.0.0.1/8"
+ExecStartPre=-/usr/bin/docker rm --force %N
+ExecStart=/usr/bin/docker run \
+  --name=%N \
+  --rm=true \
+{% if item.network is defined %}
+  --network={{ item.network }} \
+{% endif %}
+{% if item.ports is defined %}
+{%   for port in item.ports %}
+  --publish {{ port }} \
+{%   endfor %}
+{% endif %}
+  --volume /etc/timezone:/etc/timezone:ro \
+  --volume /etc/localtime:/etc/localtime:ro \
+{% if item.volumes is defined %}
+{%   for volume in item.volumes %}
+  --volume {{ volume }} \
+{%   endfor %}
+{% endif %}
+{% if item.labels is defined %}
+{%   for key, value in item.labels %}
+  --label {{ key }}={{ value }} \
+{%   endfor %}
+{% endif %}
+  -- env "TZ={{ docker_container_default_timezone }}"
+{% if item.envs is defined %}
+{%   for key, value in item.envs.iteritems() %}
+  --env {{ key }}={{ value }} \
+{%   endfor %}
+{% endif %}
+  --stop-timeout=30 \
+  {{ item.image }} {%- if item.commands | length > 0 %}\{% endif %}
+{% if item.commands is defined %}
+{%   for command in item.commands %}
+  {{ command | join(' \ ') }}
+{%   endfor %}
+{% endif %}
+
+ExecReload=/usr/bin/docker kill --signal=HUP %N 
+ExecStop=-/usr/bin/docker stop %N
+SyslogIdentifier={{ item.name }}
+Restart=always
+StartLimitInterval=0
+RestartSec=3
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[Service]
+Type=simple
+User={{ vmagent_system_user }}
+Group={{ vmagent_system_group }}
+ExecStart=/usr/local/bin/vmagent-prod {% for flag, flag_value in vmagent_service_args.items() %}--{{ flag }}={{ flag_value }} {% endfor %}
+
+SyslogIdentifier=vic-vmagent
+Restart=always
+
+PrivateTmp=yes
+ProtectHome=yes
+NoNewPrivileges=yes
+
+ProtectSystem=full
+
+{% if vmagent_systemd_version | int >= 232 %}
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=yes
+{% endif %}
+
+{% if vmagent_exec_start_post != "" %}
+ExecStartPost={{ vmagent_exec_start_post }}
+{% endif %}
+
+{% if vmagent_exec_stop != "" %}
+ExecStop={{ vmagent_exec_stop }}
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

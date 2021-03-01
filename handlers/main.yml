@@ -1,0 +1,21 @@
+---
+- name: restart docker
+  service: 
+    name: docker
+    state: restarted
+  tags: docker-container
+
+- name: restart {{ item.name }}
+  systemd:
+    name: "{{ item.name }}"
+    daemon_reloaded: yes
+    state: restarted
+  with_items: "{{ docker_containers }}"
+  tags: docker-container
+
+- name: reload {{ item.name }}
+  systemd:
+    name: "{{ item.name }}"
+    state: reloaded
+  with_items: "{{ docker_containers }}"
+  tags: docker-container

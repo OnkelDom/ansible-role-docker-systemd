@@ -1,0 +1,3 @@
+{% if docker_config | length > 0 %}
+{{ docker_config | to_nice_json(sort_keys=True) | indent(width=4,first=true) }}
+{% endif %}

@@ -1,0 +1,117 @@
+---
+- name: configure docker daemon
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart docker
+  when: docker_config is defined
+  tags: docker
+
+- name: create docker volumes base folder
+  file:
+    path: "{{ docker_volumes_basepath }}"
+    state: directory
+    mode:  '0755'
+    owner: "{{ docker_owner }}"
+    group: "{{ docker_owner }}"
+  tags: docker-container
+
+- name: create docker volumes data folders
+  file:
+    path: "{{ docker_volumes_basepath }}/{{ item }}"
+    state: directory
+    mode:  '0755'
+    owner: "{{ docker_owner }}"
+    group: "{{ docker_owner }}"
+  with_items: "{{ docker_volumes }}"
+  tags: docker-container
+
+- name: generate docker volumes
+  docker_volume:
+    name: "{{ item }}"
+    driver_options:
+      o: bind
+      type: none
+      device: "{{ docker_volumes_basepath }}/{{ item }}"
+  with_items: "{{ docker_volumes }}"
+  tags: docker-container
+
+- name: generate docker networks
+  docker_network:
+    name: "{{ item.name }}"
+    driver: "{{ item.type | default('bridge') }}"
+    ipam_config:
+      - subnet: "{{ item.subnet }}"
+        gateway: "{{ 'item.subnet' | ansible.netcommon.ipaddr('address') }}"
+        iprange: "{{ item.subnet }}"
+  with_items: "{{ docker_networks }}"
+  tags: docker-container
+
+- name: create docker config folder
+  file:
+    path: "{{ docker_config_folder_remote }}/{{ item.path }}"
+    state: directory
+    mode:  '0775'
+    owner: "{{ docker_owner }}"
+    group: "{{ docker_owner }}"
+  with_filetree: "{{ docker_config_folder_local }}"
+  when: item.state == 'directory'
+  tags: docker-container
+
+- name: copy docker configs
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ docker_config_folder_remote }}/{{ item.path }}"
+    mode: '0644'
+    owner: "{{ docker_owner }}"
+    group: "{{ docker_owner }}"
+  with_filetree: "{{ docker_config_folder_local }}"
+  # combinations of 'is' and 'is not' can be used below.
+  when: item.state == 'file' 
+        #and item.path is not search("excludedDir/*")
+        #and item.path is not search("*.bak")
+  tags: docker-container
+
+- name: register remote files
+  shell: "find {{ docker_config_folder_remote }}/ -printf '%P\n'"
+  register: remote_files
+  tags: docker-container
+
+- name: register local files
+  shell: "find {{ docker_config_folder_local }} -printf '%P\n'"
+  register: local_files
+  delegate_to: localhost
+  tags: docker-container
+
+- name: define files to remove
+  set_fact:
+    remove_files: "{{ remote_files.stdout_lines | difference(local_files.stdout_lines) }}"
+  tags: docker-container
+
+- name: files to remove
+  debug:
+    msg: "Remove: {{ remove_files }}"
+  tags: docker-container
+
+- name: remove docker configs that are not defined
+  file:
+    path: "{{ docker_config_folder_remote }}/{{ item }}"
+    state: absent
+  with_items: "{{ remove_files }}"
+  tags: docker-container
+
+- name: generate docker systemd units
+  template:
+    src: docker.service.j2
+    dest: "/etc/systemd/system/{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: 0640
+  notify: "restart {{ item.name }}"
+  with_items: "{{ docker_containers }}"
+  tags:
+    - docker-container
+    - test
